@@ -1,5 +1,4 @@
 pyTelegramBotAPI
-Flask
-gTTS
 requests
-google-genai
+Flask
+google-generativeai
