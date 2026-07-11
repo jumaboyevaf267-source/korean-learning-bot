@@ -5,7 +5,7 @@ from flask import Flask, request
 from google import genai
 
 # --- KONFIGURATSIYA ---
-TOKEN = "8859112289:AAFfySswTXD2bX9eX08kshjCOqgFrQ0gl3M"  # Shaxsiy tokeningizni shu yerga yozing
+TOKEN = "8859112289:AAFfySswTXD2bX9eX08kshjCOqgFrQ0gl3M"  # Shaxsiy bot tokeningiz
 GEMINI_API_KEY = "AQ.Ab8RN6IuNLKPqVN2vU5J-Cf7NiooeVPMK3rZz-NS687ikTb1vA"
 RENDER_APP_URL = "https://korean-learning-bot-98d9.onrender.com"
 
@@ -13,16 +13,25 @@ bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Darslar va foydalanuvchi seanslari
 user_sessions = {}
+
+# --- DARS AUDIO VA MATNLARI (Github havolalari bilan) ---
 LESSONS = [
-    {"text": "우와, 독서 좋아해? 멋지다! 나는 소설도 좋아해.", "uz": "Uva, kitob o'qishni yaxshi ko'rasanmi? Ajoyib! Men romanlarni ham yaxshi ko'raman."},
-    {"text": "한국어 공부는 재미있지만 조금 어렵습니다.", "uz": "Koreys tilini o'rganish qiziqarli, lekin biroz qiyin."}
+    {
+        "audio": "https://github.com/jumaboye/korean-learning-bot/raw/main/audio/lesson1.mp3",
+        "text": "우와, 독서 좋아해? 멋지다! 나는 소설도 좋아해.",
+        "uz": "Uva, kitob o'qishni yaxshi ko'rasanmi? Ajoyib! Men romanlarni ham yaxshi ko'raman."
+    },
+    {
+        "audio": "https://github.com/jumaboye/korean-learning-bot/raw/main/audio/lesson2.mp3",
+        "text": "한국어 공부는 재미있지만 조금 어렵습니다.",
+        "uz": "Koreys tilini o'rganish qiziqarli, lekin biroz qiyin."
+    }
 ]
 
 @app.route('/')
 def index():
-    return "Bot is running flawlessly!"
+    return "Bot is running perfectly!"
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
@@ -35,17 +44,27 @@ def webhook():
 def start_lesson(message):
     import random
     lesson = random.choice(LESSONS)
-    user_sessions[message.chat.id] = {"text": lesson["text"], "last_analysis": ""}
+    user_sessions[message.chat.id] = {"text": lesson["text"], "last_analysis": "", "last_score": ""}
     
+    # Matnli ma'lumotni ham tugmalar bilan chiqarish
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
         telebot.types.InlineKeyboardButton("📋 Text", callback_data="show_text"),
         telebot.types.InlineKeyboardButton("ℹ️ Help", callback_data="show_help")
     )
     
+    bot.send_message(message.chat.id, "✨ Yangi dars yuklanmoqda... Quyidagi audioni eshiting va qaytarib gapiring:")
+    
+    # 1. Tepadagi kabi avval darsning OVOZLI faylini yuboramiz
+    try:
+        bot.send_voice(message.chat.id, lesson["audio"])
+    except Exception:
+        bot.send_message(message.chat.id, "⚠️ Dars audiosini yuklashda muammo bo'ldi.")
+        
+    # 2. Keyin ostiga yo'riqnomani joylashtiramiz
     bot.send_message(
         message.chat.id, 
-        f"🎙️ **Koreyscha jumlani ovozli xabar orqali o'qing:**\n\n🗣️ {lesson['text']}\n🇺🇿 {lesson['uz']}", 
+        f"🗣️ **Talaffuz qiling:** {lesson['text']}\n🇺🇿 **Tarjimasi:** {lesson['uz']}", 
         reply_markup=markup, 
         parse_mode="Markdown"
     )
@@ -54,12 +73,12 @@ def start_lesson(message):
 def handle_voice(message):
     chat_id = message.chat.id
     if chat_id not in user_sessions:
-        bot.send_message(chat_id, "Iltimos, avval darsni boshlash uchun /start bosing.")
+        bot.send_message(chat_id, "Iltimos, darsni boshlash uchun avval /start bosing.")
         return
 
-    bot.send_message(chat_id, "🤔 Ovozli xabaringiz tahlil qilinmoqda...")
+    bot.send_message(chat_id, "🤔 Ovozli xabaringiz qabul qilindi, sun'iy intellekt tahlil qilmoqda...")
 
-    # Telegramdan audioni yuklab olish
+    # Telegram'dan siz yuborgan ovozli xabarni yuklab olish
     file_info = bot.get_file(message.voice.file_id)
     file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
     audio_data = requests.get(file_url).content
@@ -67,23 +86,37 @@ def handle_voice(message):
     original_text = user_sessions[chat_id]["text"]
 
     try:
-        # Gemini AI yordamida audio tahlili va interaktiv muloqot
+        # 1. Sun'iy intellekt audio tahlili (Xatolarni matnda aniqlash va baholash)
         response = ai_client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[
                 {"inline_data": {"data": audio_data, "mime_type": "audio/ogg"}},
-                f"Ushbu audio foydalanuvchining '{original_text}' gapini o'qishga urinishi. "
-                f"Talaffuz xatolarini tuzatib, suhbatni muloqot ko'rinishida davom ettir. "
-                f"Javobni aniq o'zbek tilida ber."
+                f"Foydalanuvchi ushbu gapni o'qidi: '{original_text}'. "
+                f"Uning koreyscha talaffuz xatolarini juda qisqa, do'stona o'zbek tilida tushuntir. "
+                f"Oxirida unga 100 balldan baho ber."
             ]
         )
         ai_result = response.text
-    except Exception as e:
-        ai_result = "Kechirasiz, sun'iy intellekt tahlilida xatolik yuz berdi."
+    except Exception:
+        ai_result = "Koreys tili talaffuzini tekshirishda kichik xatolik bo'ldi."
 
     user_sessions[chat_id]["last_analysis"] = ai_result
 
-    # Skrinshotdagi kabi "Explain" va "Score" tugmalari
+    # 2. ENG ASOSIYSI: AI javobini OVOZLI XABAR (Audio) ko'rinishida yuborish
+    try:
+        # Gemini Text-to-Speech ovozli javob hosil qilish
+        audio_response = ai_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=f"Ushbu matnni o'zbek o'qituvchisi ohangida ovozli o'qib ber: {ai_result}",
+            config={"response_mime_type": "audio/mp3"} # Ovozli formatda qaytarish
+        )
+        # Ovozli faylni Telegram orqali yuborish
+        bot.send_voice(chat_id, audio_response.candidates[0].content.parts[0].inline_data.data)
+    except Exception:
+        # Agar AI ovozga o'gira olmasa, matnli ko'rinishda yordam beradi
+        bot.send_message(chat_id, f"🎙️ AI Matnli tahlili:\n\n{ai_result}")
+
+    # "Explain", "Score" va "Keyingi dars" tugmalari
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
         telebot.types.InlineKeyboardButton("💡 Explain", callback_data="explain"),
@@ -91,16 +124,22 @@ def handle_voice(message):
     )
     markup.add(telebot.types.InlineKeyboardButton("➡️ Keyingi dars", callback_data="next_lesson"))
 
-    bot.send_message(chat_id, f"💡 {ai_result}", reply_markup=markup)
+    bot.send_message(chat_id, "🤖 Tahlil natijalari tayyor. Quyidagi tugmalar orqali batafsil ko'rishingiz mumkin:", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
     chat_id = call.message.chat.id
     if call.data == "next_lesson":
         start_lesson(call.message)
-    elif call.data in ["explain", "score"]:
-        analysis = user_sessions.get(chat_id, {}).get("last_analysis", "Ma'lumot topilmadi.")
-        bot.send_message(chat_id, f"📊 **Natija:**\n\n{analysis}")
+    elif call.data == "explain":
+        analysis = user_sessions.get(chat_id, {}).get("last_analysis", "Tahlil ma'lumotlari mavjud emas.")
+        bot.send_message(chat_id, f"💡 **Batafsil tushuntirish:**\n\n{analysis}")
+    elif call.data == "score":
+        analysis = user_sessions.get(chat_id, {}).get("last_analysis", "Baholash topilmadi.")
+        bot.send_message(chat_id, f"🎯 **Sizning balingiz:**\n\n{analysis}")
+    elif call.data == "show_text":
+        original_text = user_sessions.get(chat_id, {}).get("text", "Matn topilmadi.")
+        bot.send_message(chat_id, f"📋 **Dars matni:**\n\n{original_text}")
 
 if __name__ == "__main__":
     bot.remove_webhook()
