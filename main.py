@@ -20,7 +20,7 @@ WEB_APP_URL = "https://jumaboyevaf267-source.github.io/korean-learning-bot/"
 
 # 🔴 RENDER SERVERINGIZ HAVOLASI (Render'da servis ochilgach, tepada paydo bo'ladigan .onrender.com bilan tugaydigan link):
 # Buni hozircha shunday qoldiring, Render linkini olgach yangilab qo'yamiz.
-RENDER_APP_URL = "" 
+RENDER_APP_URL = "https://korean-learning-bot-98d9.onrender.com"
 
 # 📚 SPEAKING DARSLARI BAZASI
 LESSONS = [
