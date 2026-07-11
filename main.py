@@ -4,6 +4,8 @@ import threading
 import random
 import urllib.parse
 import json
+import time
+import requests
 from flask import Flask
 from telebot import types
 from gtts import gTTS
@@ -13,8 +15,12 @@ TOKEN = "8859112289:AAFfySswTXD2bX9eX08kshjCOqgFrQ0gl3M"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# 🔴 BU YERGA GITHUB PAGES HAVOLANGIZNI KEYINROQ QO'YASIZ:
+# 🔴 GITHUB PAGES HAVOLANGIZ:
 WEB_APP_URL = "https://jumaboyevaf267-source.github.io/korean-learning-bot/"
+
+# 🔴 RENDER SERVERINGIZ HAVOLASI (Render'da servis ochilgach, tepada paydo bo'ladigan .onrender.com bilan tugaydigan link):
+# Buni hozircha shunday qoldiring, Render linkini olgach yangilab qo'yamiz.
+RENDER_APP_URL = "" 
 
 # 📚 SPEAKING DARSLARI BAZASI
 LESSONS = [
@@ -59,28 +65,35 @@ LESSONS = [
 def home():
     return "Speaking Bot ishlamoqda!"
 
+# 💤 BOTNI UXLACHDAN ASROVCHI MAXSUS PHONKSION (SELF-PING)
+def keep_alive():
+    while True:
+        try:
+            if RENDER_APP_URL:
+                # O'z-o'ziga so'rov yuborib serverni uyg'otib turadi
+                requests.get(RENDER_APP_URL)
+                print("Self-ping muvaffaqiyatli bajarildi, server uyg'oq!")
+        except Exception as e:
+            print("Ping xatosi:", e)
+        time.sleep(600) # Har 10 daqiqada (600 soniya) bir marta ishlaydi
+
 @bot.message_handler(commands=['start', 'next'])
 def start_speaking_lesson(message):
     current_lesson = random.choice(LESSONS)
-    
-    # Ma'lumotlarni URL xavfsiz holatga keltirish
     encoded_data = urllib.parse.quote(json.dumps(current_lesson))
     final_web_url = f"{WEB_APP_URL}?data={encoded_data}"
     
     bot.send_message(message.chat.id, "🎙 Yangi dars tayyorlanmoqda, ovozni eshiting...")
     
-    # Ovoz (TTS) yaratish va saqlash
     tts = gTTS(text=current_lesson["text"], lang='ko')
     audio_path = f"voice_{message.chat.id}.mp3"
     tts.save(audio_path)
     
-    # Klaviatura yonidagi o'sha To'rtburchak menyuni Web App ga sozlash
     bot.set_chat_menu_button(
         chat_id=message.chat.id,
         menu_button=types.MenuButtonWebApp(type="web_app", text="Menyu 📱", web_app=types.WebAppInfo(url=WEB_APP_URL))
     )
     
-    # Inline tugmalar
     markup = types.InlineKeyboardMarkup()
     btn_text = types.InlineKeyboardButton("📋 Matnni ko'rish (Text)", web_app=types.WebAppInfo(url=final_web_url))
     btn_next = types.InlineKeyboardButton("➡️ Keyingi dars", callback_data="next_lesson")
@@ -108,6 +121,8 @@ def run_bot():
     bot.infinity_polling(none_stop=True)
 
 if __name__ == "__main__":
+    # Uyg'otuvchi tizimni alohida oqimda (thread) ishga tushiramiz
+    threading.Thread(target=keep_alive, daemon=True).start()
     threading.Thread(target=run_bot).start()
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
