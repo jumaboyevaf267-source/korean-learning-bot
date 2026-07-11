@@ -1,128 +1,109 @@
-import telebot
 import os
-import threading
-import random
-import urllib.parse
-import json
-import time
+import telebot
 import requests
-from flask import Flask
-from telebot import types
-from gtts import gTTS
+from flask import Flask, request
+from google import genai
 
-# 🔴 BU YERGA YANGI BOT TOKENINGIZNI YOZING:
-TOKEN = "8859112289:AAFfySswTXD2bX9eX08kshjCOqgFrQ0gl3M"
-bot = telebot.TeleBot(TOKEN)
-app = Flask(__name__)
-
-# 🔴 GITHUB PAGES HAVOLANGIZ:
-WEB_APP_URL = "https://jumaboyevaf267-source.github.io/korean-learning-bot/"
-
-# 🔴 RENDER SERVERINGIZ HAVOLASI (Render'da servis ochilgach, tepada paydo bo'ladigan .onrender.com bilan tugaydigan link):
-# Buni hozircha shunday qoldiring, Render linkini olgach yangilab qo'yamiz.
+# --- KONFIGURATSIYA ---
+TOKEN = "8859112289:AAFfySswTXD2bX9eX08kshjCOqgFrQ0gl3M"  # Shaxsiy tokeningizni shu yerga yozing
+GEMINI_API_KEY = "AQ.Ab8RN6IuNLKPqVN2vU5J-Cf7NiooeVPMK3rZz-NS687ikTb1vA"
 RENDER_APP_URL = "https://korean-learning-bot-98d9.onrender.com"
 
-# 📚 SPEAKING DARSLARI BAZASI
+bot = telebot.TeleBot(TOKEN)
+app = Flask(__name__)
+ai_client = genai.Client(api_key=GEMINI_API_KEY)
+
+# Darslar va foydalanuvchi seanslari
+user_sessions = {}
 LESSONS = [
-    {
-        "text": "우와, 독서 좋아해? 멋지다! 나는 소설도 좋아해.",
-        "full_uz": "Uva, kitob o'qishni yaxshi ko'rasanmi? Ajoyib! Men romanlarni ham yaxshi ko'raman.",
-        "words": [
-            {"ko": "우와", "uz": "Uva!", "tr": "uwa", "desc": "Hayratlanish xitobi."},
-            {"ko": "독서", "uz": "kitob o'qish", "tr": "dok-seo", "desc": "Mutolaa qilish harakati."},
-            {"ko": "좋아해", "uz": "yaxshi ko'rasanmi?", "tr": "jo-a-hae", "desc": "좋아하다 (yaxshi ko'rmoq) fe'li."},
-            {"ko": "멋지다", "uz": "Ajoyib / Zo'r", "tr": "meot-ji-da", "desc": "Sifat, tasanno bildiradi."},
-            {"ko": "나는", "uz": "men esa", "tr": "na-neun", "desc": "Kishilik olmoshi + egalik qo'shimchasi."},
-            {"ko": "소설도", "uz": "romanlarni ham", "tr": "so-seol-do", "desc": "소설 (roman) + 도 (ham) qo'shimchasi."}
-        ]
-    },
-    {
-        "text": "한국어 공부는 재미있지만 조금 어렵습니다.",
-        "full_uz": "Koreys tilini o'rganish qiziqarli, lekin biroz qiyin.",
-        "words": [
-            {"ko": "한국어", "uz": "Koreys tili", "tr": "han-gug-eo", "desc": "Koreya respublikasi davlat tili."},
-            {"ko": "공부는", "uz": "o'qish / o'rganish", "tr": "gong-bu-neun", "desc": "Dars qilish, ilm olish."},
-            {"ko": "재미있지만", "uz": "qiziqarli lekin", "tr": "jae-mi-it-ji-man", "desc": "지만 (lekin) zidlovchi qo'shimchasi."},
-            {"ko": "조금", "uz": "biroz / ozgina", "tr": "jo-geum", "desc": "Miqdor bildiruvchi ravish."},
-            {"ko": "어렵습니다", "uz": "qiyindir", "tr": "eo-ryeop-seum-ni-da", "desc": "어렵다 (qiyin bo'moq) fe'lining rasmiy shakli."}
-        ]
-    },
-    {
-        "text": "오늘 날씨가 정말 화창하네요! 같이 산책할까요?",
-        "full_uz": "Bugun havo juda musaffo-ya! Birga aylangani boramizmi?",
-        "words": [
-            {"ko": "오늘", "uz": "Bugun", "tr": "o-neul", "desc": "Joriy kunni anglatadi."},
-            {"ko": "날씨가", "uz": "havo", "tr": "nal-ssi-ga", "desc": "Ob-havo + ega qo'shimchasi."},
-            {"ko": "정말", "uz": "haqiqatdan / juda", "tr": "jeong-mal", "desc": "Chindan ham, aslo."},
-            {"ko": "화창하네요", "uz": "ochiq / musaffo ekan-a", "tr": "hwa-chang-ha-ne-yo", "desc": "Havo ochiqligiga nisbatan hayrat."},
-            {"ko": "같이", "uz": "birgalikda", "tr": "ga-chi", "desc": "Birga, hamrohlikda."},
-            {"ko": "산책할까요", "uz": "aylanamizmi? / sayr qilaylikmi?", "tr": "san-chaek-hal-kka-yo", "desc": "Taklif ma'nosidagi fe'l shakli."}
-        ]
-    }
+    {"text": "우와, 독서 좋아해? 멋지다! 나는 소설도 좋아해.", "uz": "Uva, kitob o'qishni yaxshi ko'rasanmi? Ajoyib! Men romanlarni ham yaxshi ko'raman."},
+    {"text": "한국어 공부는 재미있지만 조금 어렵습니다.", "uz": "Koreys tilini o'rganish qiziqarli, lekin biroz qiyin."}
 ]
 
 @app.route('/')
-def home():
-    return "Speaking Bot ishlamoqda!"
+def index():
+    return "Bot is running flawlessly!"
 
-# 💤 BOTNI UXLACHDAN ASROVCHI MAXSUS PHONKSION (SELF-PING)
-def keep_alive():
-    while True:
-        try:
-            if RENDER_APP_URL:
-                # O'z-o'ziga so'rov yuborib serverni uyg'otib turadi
-                requests.get(RENDER_APP_URL)
-                print("Self-ping muvaffaqiyatli bajarildi, server uyg'oq!")
-        except Exception as e:
-            print("Ping xatosi:", e)
-        time.sleep(600) # Har 10 daqiqada (600 soniya) bir marta ishlaydi
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    json_string = request.get_data().decode("utf-8")
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "OK", 200
 
 @bot.message_handler(commands=['start', 'next'])
-def start_speaking_lesson(message):
-    current_lesson = random.choice(LESSONS)
-    encoded_data = urllib.parse.quote(json.dumps(current_lesson))
-    final_web_url = f"{WEB_APP_URL}?data={encoded_data}"
+def start_lesson(message):
+    import random
+    lesson = random.choice(LESSONS)
+    user_sessions[message.chat.id] = {"text": lesson["text"], "last_analysis": ""}
     
-    bot.send_message(message.chat.id, "🎙 Yangi dars tayyorlanmoqda, ovozni eshiting...")
-    
-    tts = gTTS(text=current_lesson["text"], lang='ko')
-    audio_path = f"voice_{message.chat.id}.mp3"
-    tts.save(audio_path)
-    
-    bot.set_chat_menu_button(
-        chat_id=message.chat.id,
-        menu_button=types.MenuButtonWebApp(type="web_app", text="Menyu 📱", web_app=types.WebAppInfo(url=WEB_APP_URL))
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton("📋 Text", callback_data="show_text"),
+        telebot.types.InlineKeyboardButton("ℹ️ Help", callback_data="show_help")
     )
     
-    markup = types.InlineKeyboardMarkup()
-    btn_text = types.InlineKeyboardButton("📋 Matnni ko'rish (Text)", web_app=types.WebAppInfo(url=final_web_url))
-    btn_next = types.InlineKeyboardButton("➡️ Keyingi dars", callback_data="next_lesson")
-    markup.add(btn_text)
-    markup.add(btn_next)
+    bot.send_message(
+        message.chat.id, 
+        f"🎙️ **Koreyscha jumlani ovozli xabar orqali o'qing:**\n\n🗣️ {lesson['text']}\n🇺🇿 {lesson['uz']}", 
+        reply_markup=markup, 
+        parse_mode="Markdown"
+    )
+
+@bot.message_handler(content_types=['voice'])
+def handle_voice(message):
+    chat_id = message.chat.id
+    if chat_id not in user_sessions:
+        bot.send_message(chat_id, "Iltimos, avval darsni boshlash uchun /start bosing.")
+        return
+
+    bot.send_message(chat_id, "🤔 Ovozli xabaringiz tahlil qilinmoqda...")
+
+    # Telegramdan audioni yuklab olish
+    file_info = bot.get_file(message.voice.file_id)
+    file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
+    audio_data = requests.get(file_url).content
     
-    with open(audio_path, 'rb') as audio:
-        bot.send_voice(
-            message.chat.id, 
-            audio, 
-            caption="🎧 Audioni eshiting va qaytarib gapiring. Matn ustiga bosib so'zlarni o'rganing!", 
-            reply_markup=markup
+    original_text = user_sessions[chat_id]["text"]
+
+    try:
+        # Gemini AI yordamida audio tahlili va interaktiv muloqot
+        response = ai_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+                {"inline_data": {"data": audio_data, "mime_type": "audio/ogg"}},
+                f"Ushbu audio foydalanuvchining '{original_text}' gapini o'qishga urinishi. "
+                f"Talaffuz xatolarini tuzatib, suhbatni muloqot ko'rinishida davom ettir. "
+                f"Javobni aniq o'zbek tilida ber."
+            ]
         )
-        
-    if os.path.exists(audio_path):
-        os.remove(audio_path)
+        ai_result = response.text
+    except Exception as e:
+        ai_result = "Kechirasiz, sun'iy intellekt tahlilida xatolik yuz berdi."
 
-@bot.callback_query_handler(func=lambda call: call.data == "next_lesson")
-def handle_next(call):
-    bot.answer_callback_query(call.id, "Yangi dars yuklanmoqda...")
-    start_speaking_lesson(call.message)
+    user_sessions[chat_id]["last_analysis"] = ai_result
 
-def run_bot():
-    bot.remove_webhook()
-    bot.infinity_polling(none_stop=True)
+    # Skrinshotdagi kabi "Explain" va "Score" tugmalari
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton("💡 Explain", callback_data="explain"),
+        telebot.types.InlineKeyboardButton("🎯 Score", callback_data="score")
+    )
+    markup.add(telebot.types.InlineKeyboardButton("➡️ Keyingi dars", callback_data="next_lesson"))
+
+    bot.send_message(chat_id, f"💡 {ai_result}", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_inline(call):
+    chat_id = call.message.chat.id
+    if call.data == "next_lesson":
+        start_lesson(call.message)
+    elif call.data in ["explain", "score"]:
+        analysis = user_sessions.get(chat_id, {}).get("last_analysis", "Ma'lumot topilmadi.")
+        bot.send_message(chat_id, f"📊 **Natija:**\n\n{analysis}")
 
 if __name__ == "__main__":
-    # Uyg'otuvchi tizimni alohida oqimda (thread) ishga tushiramiz
-    threading.Thread(target=keep_alive, daemon=True).start()
-    threading.Thread(target=run_bot).start()
-    port = int(os.environ.get("PORT", 8000))
-    app.run(host="0.0.0.0", port=port)
+    bot.remove_webhook()
+    bot.set_webhook(url=f"{RENDER_APP_URL}/{TOKEN}")
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+    
