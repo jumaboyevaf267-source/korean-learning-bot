@@ -2,19 +2,34 @@ import os
 import random
 import telebot
 import requests
+import google.generativeai as genai
 from flask import Flask, request
 
 # --- KONFIGURATSIYA ---
+# Tokenlar va xavfsizlik (GitHub bloklamasligi uchun API kalit maxfiy o'zgaruvchidan olinadi)
 TOKEN = "8859112289:AAFfySswTXD2bX9eX08kshjCOqgFrQ0gl3M"
 RENDER_APP_URL = "https://korean-learning-bot-98d9.onrender.com"
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
 user_sessions = {}
 
-# DARSLAR BAZASI
+# DARSLAR BAZASI (Chatty kabi real topshiriqlar va dars tizimi)
 LESSONS = [
+    {
+        "text": "안녕하세요. 저는 바람개비입니다. 제가 가장 좋아하는 취미는 독서예요.",
+        "translations": {
+            "uz": "Assalomu alaykum. Men Baramgaebiman. Mening eng sevimli xobbim kitob o'qish.",
+            "en": "Hello. I am Baramgaebi. My favorite hobby is reading.",
+            "ru": "Здравствуйте. Я Барамгаэби. Мое любимое хобби — чтение.",
+            "tr": "Merhaba. Ben Baramgaebi. En sevdiğim hobim kitap okumak."
+        }
+    },
     {
         "text": "우와, 독서 좋아해? 멋지다! 나는 소설도 좋아해.",
         "translations": {
@@ -22,26 +37,22 @@ LESSONS = [
             "en": "Wow, do you like reading? Cool! I like novels too.",
             "ru": "Вау, любишь читать? Круто! Я тоже люблю романы.",
             "tr": "Vay, kitap okumayı sever misin? Harika! Ben de romanları severim."
-        },
-        "explain": "💡 **Tushuntirish:**\n\n1. **우와 (U-wa)** - Hayratlanish sadosi, 'Oho!', 'Vau!' ma'nosida.\n2. **독서 (Dok-seo)** - Kitob mutolaasi.\n3. **좋아해? (Cho-a-hae?)** - Yaxshi ko'rasanmi? (Norasmiy so'zlashuv uslubi).\n4. **멋지다! (Meot-ji-da!)** - Ajoyib, zo'r, klass!\n5. **소설도 (So-seol-do)** - Romanlarni ham ('도' qo'shimchasi '-ham' ma'nosini beradi).",
-        "score": "🎯 **Sizning balingiz:**\n\n* Talaffuz aniqligi: **92/100**\n* Ohang (Intonatsiya): **88/100**\n* Umumiy natija: **90% (Yaxshi)**"
+        }
     },
     {
-        "text": "한국어 공부는 재미있지만 조금 어렵습니다.",
+        "text": "오늘 날씨가 너무 좋아서 산책하고 싶어요.",
         "translations": {
-            "uz": "Koreys tilini o'rganish qiziqarli, lekin biroz qiyin.",
-            "en": "Studying Korean is fun but a bit difficult.",
-            "ru": "Изучать корейский язык интересно, но немного сложно.",
-            "tr": "Koreyce çalışmak eğlenceli ama biraz zor."
-        },
-        "explain": "💡 **Tushuntirish:**\n\n1. **한국어 공부는 (Han-gug-eo gong-bu-neun)** - Koreys tili o'rganish (ega qo'shimchasi bilan).\n2. **재미있지만 (Chae-mi-it-ji-man)** - Qiziqarli, biroq/lekin ('-지만' grammatikasi qarama-qarshilikni bildiradi).\n3. **조금 (Cho-geum)** - Biroz, sal.\n4. **어렵습니다 (Eo-ryeop-seum-ni-da)** - Qiyin (Rasmiy-hurmat uslubida).",
-        "score": "🎯 **Sizning balingiz:**\n\n* Talaffuz aniqligi: **95/100**\n* Ohang (Intonatsiya): **90/100**\n* Umumiy natija: **93% (Ajoyib)**"
+            "uz": "Bugun ob-havo juda yaxshi, sayr qilgim kelyapti.",
+            "en": "The weather is so nice today, I want to take a walk.",
+            "ru": "Сегодня такая хорошая погода, я хочу прогуляться.",
+            "tr": "Bugün hava çok güzel, yürüyüşe çıkmak istiyorum."
+        }
     }
 ]
 
 @app.route('/')
 def index():
-    return "Bot is running perfectly!"
+    return "Chatty Koreys tili boti faol!"
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
@@ -62,46 +73,106 @@ def start_lesson(message):
     user_sessions[chat_id] = {
         "text": lesson["text"], 
         "translations": lesson["translations"],
-        "explain": lesson["explain"],
-        "score": lesson["score"]
+        "ai_explain": "Hali tahlil qilinmadi. Ovozli xabar yuboring.",
+        "ai_score": "Hali baholanmadi."
     }
     
-    # Skrinshotdagi kabi Text va Help tugmalari
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
-        telebot.types.InlineKeyboardButton("Text", callback_data="choose_lang"),
-        telebot.types.InlineKeyboardButton("Help", callback_data="show_help")
+        telebot.types.InlineKeyboardButton("📝 Text", callback_data="choose_lang"),
+        telebot.types.InlineKeyboardButton("ℹ️ Help", callback_data="show_help")
     )
     
     try:
+        # Koreyscha audio yaratish
         tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl=ko&client=tw-ob&q={requests.utils.quote(lesson['text'])}"
         headers = {"User-Agent": "Mozilla/5.0"}
         audio_bytes = requests.get(tts_url, headers=headers).content
         
-        # Faqat toza audio yuboriladi
+        bot.send_message(chat_id, "🎧 Audioni eshiting va xuddi shu gapni ovozli xabar orqali yuboring:")
         bot.send_voice(chat_id, audio_bytes, reply_markup=markup)
     except Exception:
-        bot.send_message(chat_id, "Ovozli darsni yuklashda muammo bo'ldi.", reply_markup=markup)
+        bot.send_message(chat_id, "Darsni yuklashda xatolik bo'ldi.", reply_markup=markup)
 
 @bot.message_handler(content_types=['voice'])
 def handle_voice(message):
     chat_id = message.chat.id
     if chat_id not in user_sessions:
-        bot.send_message(chat_id, "Iltimos, darsni boshlash uchun /start buyrug'ini bosing.")
+        bot.send_message(chat_id, "Iltimos, avval /start buyrug'ini bosing.")
         return
 
-    # Chatty kabi tezda audio tahlil formatini chiqarish
-    original_text = user_sessions[chat_id]["text"]
-    
-    markup = telebot.types.InlineKeyboardMarkup()
-    markup.row(
-        telebot.types.InlineKeyboardButton("Explain", callback_data="explain"),
-        telebot.types.InlineKeyboardButton("Score", callback_data="score")
-    )
-    markup.add(telebot.types.InlineKeyboardButton("➡️ Keyingi dars", callback_data="next_lesson"))
+    if not GEMINI_API_KEY:
+        bot.send_message(chat_id, "⚠️ Tizimda API kalit sozlanmagan. Render panellarida GEMINI_API_KEY ni o'rnating.")
+        return
 
-    ai_reply = f"📝 **AI Matnli tahlili:**\n\nGap muvaffaqiyatli o'qildi. Quyidagi tugmalar orqali xatolaringizni ko'rishingiz yoki keyingi darsga o'tishingiz mumkin."
-    bot.send_message(chat_id, ai_reply, reply_markup=markup, parse_mode="Markdown")
+    status_msg = bot.send_message(chat_id, "🤔 Ovozli xabaringiz qabul qilindi, sun'iy intellekt tahlil qilmoqda...")
+
+    try:
+        # Telegramdan ovozli xabarni yuklab olish
+        file_info = bot.get_file(message.voice.file_id)
+        file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
+        audio_data = requests.get(file_url).content
+
+        # Gemini 1.5 Flash modeli ovozli fayllarni to'g'ridan-to'g'ri eshita oladi
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        original_text = user_sessions[chat_id]["text"]
+        
+        prompt = f"""
+        Foydalanuvchi ushbu koreyscha gapni o'qib ovoz yozdi: "{original_text}".
+        Ushbu yuborilgan audioni tinglang. Uni berilgan asl gap bilan solishtiring.
+        Foydalanuvchi talaffuzida xato qilgan, noto'g'ri yoki tushirib qoldirgan so'zlarni aniqlang.
+        Javobni quyidagi 3 ta qismga ajratib, faqat O'zbek tilida tayyorlab bering.
+        
+        1. MATNLITAHIL: Foydalanuvchi o'qigan gapni xatolari bilan ko'rsating. Xato aytilgan so'zlarni qalin (bold) qilib belgilang. Masalan: "안녕하세요. 저는 **바람개비**입니다..." shaklida bo'lsin.
+        2. TUSHUNTIRISH: Qaysi harflar yoki qoidalar noto'g'ri aytilganini qisqa va lo'nda tushuntiring.
+        3. BAHO: Talaffuzga 100 ballik tizimda aniq bitta baho bering (Masalan: 85/100).
+        """
+
+        response = model.generate_content([
+            prompt,
+            {
+                "mime_type": "audio/ogg",
+                "data": audio_data
+            }
+        ])
+        
+        res_text = response.text
+        
+        # Sun'iy intellekt javobini qismlarga ajratib olish
+        analysis_part = "Tahlil yakunlandi."
+        explain_part = "Ohang va talaffuz bo'yicha tavsiyalar."
+        score_part = "🎯 Baho: 80/100"
+        
+        if "MATNLITAHIL" in res_text:
+            try:
+                parts = res_text.split("TUSHUNTIRISH:")
+                analysis_part = parts[0].replace("1. MATNLITAHIL:", "").strip()
+                sub_parts = parts[1].split("BAHO:")
+                explain_part = sub_parts[0].strip()
+                score_part = sub_parts[1].replace("3. ", "").strip()
+            except Exception:
+                analysis_part = res_text
+
+        user_sessions[chat_id]["ai_explain"] = explain_part
+        user_sessions[chat_id]["ai_score"] = score_part
+
+        # Tugmalar paneli
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.row(
+            telebot.types.InlineKeyboardButton("💡 Explain", callback_data="explain"),
+            telebot.types.InlineKeyboardButton("🎯 Score", callback_data="score")
+        )
+        markup.add(telebot.types.InlineKeyboardButton("➡️ Keyingi dars", callback_data="next_lesson"))
+
+        bot.delete_message(chat_id, status_msg.message_id)
+        
+        # Chatty kabi matnli tahlil natijasini yuborish
+        bot.send_message(chat_id, f"📝 **AI Matnli tahlili:**\n\n{analysis_part}", reply_markup=markup, parse_mode="Markdown")
+
+    except Exception as e:
+        bot.delete_message(chat_id, status_msg.message_id)
+        bot.send_message(chat_id, "❌ Audio tahlilida texnik xatolik yuz berdi. Qaytadan urinib ko'ring yoki /start bosing.")
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
@@ -121,29 +192,24 @@ def callback_inline(call):
             telebot.types.InlineKeyboardButton("🇷🇺 Russkiy", callback_data="lang_ru"),
             telebot.types.InlineKeyboardButton("🇹🇷 Türkçe", callback_data="lang_tr")
         )
-        bot.send_message(chat_id, "Qaysi tildagi matn va tarjimani ko'rmoqchisiz?", reply_markup=markup)
+        bot.send_message(chat_id, "Qaysi tildagi tarjimani ko'rmoqchisiz?", reply_markup=markup)
         
     elif call.data.startswith("lang_"):
         lang_code = call.data.split("_")[1]
-        original_text = session.get("text", "")
         translations = session.get("translations", {})
-        selected_translation = translations.get(lang_code, "Mavjud emas.")
-        
-        bot.send_message(chat_id, f"💡 **{original_text}**\n\nTarjimasi: {selected_translation}")
+        bot.send_message(chat_id, f"Tarjima:\n`{translations.get(lang_code, 'Mavjud emas.')}`", parse_mode="Markdown")
         
     elif call.data == "explain":
-        explain_text = session.get("explain", "Ma'lumot topilmadi.")
-        bot.send_message(chat_id, explain_text, parse_mode="Markdown")
+        bot.send_message(chat_id, f"💡 **Xatolar tushuntirishi:**\n\n{session.get('ai_explain')}")
         
     elif call.data == "score":
-        score_text = session.get("score", "Baho topilmadi.")
-        bot.send_message(chat_id, score_text, parse_mode="Markdown")
+        bot.send_message(chat_id, f"🎯 **Natijangiz:**\n\n{session.get('ai_score')}")
         
     elif call.data == "show_help":
-        bot.send_message(chat_id, "ℹ️ Yuqoridagi ovozli xabarni eshiting va xuddi shu ohangda mikrofonga qarab o'qing.")
+        bot.send_message(chat_id, "ℹ️ Yuqoridagi audioni tinglang, so'ngra Telegram mikrofon tugmasini bosib, gapni koreys tilida qayta o'qib yuboring.")
 
 if __name__ == "__main__":
     bot.remove_webhook()
     bot.set_webhook(url=f"{RENDER_APP_URL}/{TOKEN}")
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
-                                    
+        
