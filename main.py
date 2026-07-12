@@ -1,10 +1,9 @@
 import os
 import random
+import base64
 import telebot
 import requests
 from flask import Flask, request
-from google import genai
-from google.genai import types
 
 # --- KONFIGURATSIYA ---
 TOKEN = "8859112289:AAFfySswTXD2bX9eX08kshjCOqgFrQ0gl3M"
@@ -13,11 +12,10 @@ RENDER_APP_URL = "https://korean-learning-bot-98d9.onrender.com"
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
-client = genai.Client(api_key=GEMINI_API_KEY)
 
 user_sessions = {}
 
-# BOYITILGAN DARSLAR BAZASI (Endi har gal har xil savol chiqadi)
+# DARSLAR BAZASI
 LESSONS = [
     {
         "text": "우와, 독서 좋아해? 멋지다! 나는 소설도 좋아해.",
@@ -45,24 +43,6 @@ LESSONS = [
             "ru": "Сегодня такая хорошая погода, хочется прогуляться.",
             "tr": "Bugün hava çok güzel, yürüyüşe çıkmak istiyorum."
         }
-    },
-    {
-        "text": "지금 몇 시예요? 제가 약속 시간에 늦었어요.",
-        "translations": {
-            "uz": "Hozir soat necha bo'ldi? Men uchrashuv vaqtiga kechikdim.",
-            "en": "What time is it now? I'm late for the appointment.",
-            "ru": "Который час? Я опоздал на встречу.",
-            "tr": "Saat kaç? Randevuya geç kaldım."
-        }
-    },
-    {
-        "text": "맛있는 한국 음식을 추천해 줄 수 있어요?",
-        "translations": {
-            "uz": "Menga mazali koreys taomlarini tavsiya qila olasizmi?",
-            "en": "Can you recommend some delicious Korean food?",
-            "ru": "Можете порекомендовать вкусную корейскую еду?",
-            "tr": "Lezzetli Kore yemekleri tavsiye edebilir misiniz?"
-        }
     }
 ]
 
@@ -81,45 +61,40 @@ def webhook():
 def start_lesson(message):
     chat_id = message.chat.id
     
-    # Har safar avvalgisidan farqli tasodifiy dars tanlash
     lesson = random.choice(LESSONS)
-    
-    # Agar foydalanuvchi aynan shu darsni boya ko'rgan bo'lsa, boshqasini tanlaydi
-    if chat_id in user_sessions and len(LESSONS) > 1:
+    if chat_id in user_sessions:
         while lesson["text"] == user_sessions[chat_id].get("text"):
             lesson = random.choice(LESSONS)
 
     user_sessions[chat_id] = {"text": lesson["text"], "translations": lesson["translations"], "last_analysis": ""}
     
-    status_msg = bot.send_message(chat_id, "🎧 Yangi dars audiosi tayyorlanmoqda...")
+    status_msg = bot.send_message(chat_id, "🎧 Yangi dars yuklanmoqda...")
     
+    # FAQAT DARSDAGI MATNNING KOREYSChA OVOZINI GENERATSIYA QILISH
     try:
-        # Gemini orqali matnni koreyscha toza ovozga o'girish
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=f"Ushbu koreyscha gapni ona tilida gapiradigan odamdek aniq va tabiiy ohangda o'qib ber: {lesson['text']}",
-            config=types.GenerateContentConfig(
-                response_mime_type="audio/mp3"
-            )
-        )
-        audio_bytes = response.candidates[0].content.parts[0].inline_data.data
+        tts_url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={GEMINI_API_KEY}"
+        payload = {
+            "input": {"text": lesson["text"]},
+            "voice": {"languageCode": "ko-KR", "ssmlGender": "NEUTRAL"},
+            "audioConfig": {"audioEncoding": "MP3"}
+        }
+        res = requests.post(tts_url, json=payload)
+        audio_data = res.json().get("audioContent")
+        audio_bytes = base64.b64decode(audio_data)
         
-        # Yashirin tarjima va yordam tugmalari
         markup = telebot.types.InlineKeyboardMarkup()
         markup.row(
             telebot.types.InlineKeyboardButton("📋 Text & Translation", callback_data="choose_lang"),
             telebot.types.InlineKeyboardButton("ℹ️ Help", callback_data="show_help")
         )
         
-        bot.send_voice(
-            chat_id, 
-            audio_bytes, 
-            caption="🗣️ Audioni eshiting va xuddi shu gapni ovozli xabar (voice) orqali qaytarib yuboring.", 
-            reply_markup=markup
-        )
+        # Ortiqcha havolalarsiz faqat toza audio yuboriladi
+        bot.send_voice(chat_id, audio_bytes, caption="🗣️ Audioni eshiting va xuddi shu gapni ovozli xabar orqali yuboring.", reply_markup=markup)
         bot.delete_message(chat_id, status_msg.message_id)
-    except Exception as e:
-        bot.edit_message_text(f"⚠️ Ovoz yuklashda xato: {str(e)}. Qaytadan urinish: /start", chat_id, status_msg.message_id)
+    except Exception:
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.add(telebot.types.InlineKeyboardButton("📋 Text & Translation", callback_data="choose_lang"))
+        bot.edit_message_text("⚠️ Dars tayyor. Pastdagi tugmani bosing:", chat_id, status_msg.message_id, reply_markup=markup)
 
 @bot.message_handler(content_types=['voice'])
 def handle_voice(message):
@@ -133,20 +108,31 @@ def handle_voice(message):
     file_info = bot.get_file(message.voice.file_id)
     file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
     audio_bytes = requests.get(file_url).content
+    audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
     
     original_text = user_sessions[chat_id]["text"]
 
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[
-                types.Part.from_bytes(data=audio_bytes, mime_type='audio/ogg'),
-                f"Foydalanuvchi mana bu gapni o'qidi: '{original_text}'. Uning talaffuz xatolarini juda qisqa va tushunarli o'zbek tilida tushuntir va 100 balldan baho ber."
-            ]
-        )
-        ai_result = response.text
-    except Exception as e:
-        ai_result = f"Tahlilda xato: {str(e)}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"inlineData": {"mimeType": "audio/ogg", "data": audio_b64}},
+                    {"text": f"Foydalanuvchi mana bu koreyscha gapni o'qidi: '{original_text}'. Uning talaffuz xatolarini juda qisqa va tushunarli o'zbek tilida tushuntir va 100 balldan baho ber."}
+                ]
+            }]
+        }
+        
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code == 200:
+            ai_result = response.json()['candidates'][0]['content']['parts'][0]['text']
+        else:
+            ai_result = "Tizim ulanishida xato bo'ldi."
+            
+    except Exception:
+        ai_result = "Tahlil qilishda xatolik yuz berdi."
 
     user_sessions[chat_id]["last_analysis"] = ai_result
     bot.delete_message(chat_id, status_msg.message_id)
@@ -158,7 +144,7 @@ def handle_voice(message):
     )
     markup.add(telebot.types.InlineKeyboardButton("➡️ Keyingi dars", callback_data="next_lesson"))
 
-    bot.send_message(chat_id, f"📊 **Tahlil Natijasi:**\n\n{ai_result}", reply_markup=markup, parse_mode="Markdown")
+    bot.send_message(chat_id, f"📊 **AI Tahlili:**\n\n{ai_result}", reply_markup=markup, parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
@@ -193,7 +179,7 @@ def callback_inline(call):
         bot.send_message(chat_id, f"📊 **Batafsil:**\n\n{analysis}")
         
     elif call.data == "show_help":
-        bot.send_message(chat_id, "ℹ️ Yuqoridagi audioni tinglang va xuddi shu gapni o'zingiz mikrofon orqali yozib yuboring.")
+        bot.send_message(chat_id, "ℹ️ Yuqoridagi audioni tinglang va mikrofonni bosib xuddi shu gapni qayta o'qib yuboring.")
 
 if __name__ == "__main__":
     bot.remove_webhook()
