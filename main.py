@@ -1,12 +1,13 @@
 import os
 import random
+import time
+import threading
 import telebot
 import requests
 import google.generativeai as genai
 from flask import Flask, request
 
 # --- KONFIGURATSIYA ---
-# Tokenlar va xavfsizlik (GitHub bloklamasligi uchun API kalit maxfiy o'zgaruvchidan olinadi)
 TOKEN = "8859112289:AAFfySswTXD2bX9eX08kshjCOqgFrQ0gl3M"
 RENDER_APP_URL = "https://korean-learning-bot-98d9.onrender.com"
 
@@ -19,7 +20,7 @@ app = Flask(__name__)
 
 user_sessions = {}
 
-# DARSLAR BAZASI (Chatty kabi real topshiriqlar va dars tizimi)
+# DARSLAR BAZASI
 LESSONS = [
     {
         "text": "안녕하세요. 저는 바람개비입니다. 제가 가장 좋아하는 취미는 독서예요.",
@@ -50,9 +51,20 @@ LESSONS = [
     }
 ]
 
+# --- BOTNI UYQUSIZ SAQLASH UCHUN PING FUNKSIYASI ---
+def keep_alive():
+    while True:
+        try:
+            # Har 12 daqiqada Render URL-ga so'rov yuborib uyg'otib turadi
+            requests.get(RENDER_APP_URL)
+            print("Ping yuborildi: Bot uyg'oq holatda saqlanmoqda.")
+        except Exception as e:
+            print(f"Ping yuborishda xato: {e}")
+        time.sleep(720) # 720 soniya = 12 daqiqa
+
 @app.route('/')
 def index():
-    return "Chatty Koreys tili boti faol!"
+    return "Chatty Koreys tili boti faol va uyg'oq!"
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
@@ -84,7 +96,6 @@ def start_lesson(message):
     )
     
     try:
-        # Koreyscha audio yaratish
         tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl=ko&client=tw-ob&q={requests.utils.quote(lesson['text'])}"
         headers = {"User-Agent": "Mozilla/5.0"}
         audio_bytes = requests.get(tts_url, headers=headers).content
@@ -108,14 +119,11 @@ def handle_voice(message):
     status_msg = bot.send_message(chat_id, "🤔 Ovozli xabaringiz qabul qilindi, sun'iy intellekt tahlil qilmoqda...")
 
     try:
-        # Telegramdan ovozli xabarni yuklab olish
         file_info = bot.get_file(message.voice.file_id)
         file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
         audio_data = requests.get(file_url).content
 
-        # Gemini 1.5 Flash modeli ovozli fayllarni to'g'ridan-to'g'ri eshita oladi
         model = genai.GenerativeModel("gemini-1.5-flash")
-        
         original_text = user_sessions[chat_id]["text"]
         
         prompt = f"""
@@ -139,7 +147,6 @@ def handle_voice(message):
         
         res_text = response.text
         
-        # Sun'iy intellekt javobini qismlarga ajratib olish
         analysis_part = "Tahlil yakunlandi."
         explain_part = "Ohang va talaffuz bo'yicha tavsiyalar."
         score_part = "🎯 Baho: 80/100"
@@ -157,7 +164,6 @@ def handle_voice(message):
         user_sessions[chat_id]["ai_explain"] = explain_part
         user_sessions[chat_id]["ai_score"] = score_part
 
-        # Tugmalar paneli
         markup = telebot.types.InlineKeyboardMarkup()
         markup.row(
             telebot.types.InlineKeyboardButton("💡 Explain", callback_data="explain"),
@@ -166,8 +172,6 @@ def handle_voice(message):
         markup.add(telebot.types.InlineKeyboardButton("➡️ Keyingi dars", callback_data="next_lesson"))
 
         bot.delete_message(chat_id, status_msg.message_id)
-        
-        # Chatty kabi matnli tahlil natijasini yuborish
         bot.send_message(chat_id, f"📝 **AI Matnli tahlili:**\n\n{analysis_part}", reply_markup=markup, parse_mode="Markdown")
 
     except Exception as e:
@@ -211,5 +215,9 @@ def callback_inline(call):
 if __name__ == "__main__":
     bot.remove_webhook()
     bot.set_webhook(url=f"{RENDER_APP_URL}/{TOKEN}")
+    
+    # Ping taymerini alohida potokda ishga tushirish (Botni uyg'oq saqlash uchun)
+    threading.Thread(target=keep_alive, daemon=True).start()
+    
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
-        
+            
