@@ -4,8 +4,6 @@ import time
 import threading
 import telebot
 import requests
-import speech_recognition as sr
-from pydub import AudioSegment
 import google.generativeai as genai
 from flask import Flask, request
 
@@ -41,6 +39,7 @@ def keep_alive():
     while True:
         try:
             requests.get(RENDER_APP_URL)
+            print("Bot uyg'oq saqlanmoqda.")
         except Exception:
             pass
         time.sleep(720)
@@ -91,58 +90,44 @@ def handle_voice(message):
         bot.send_message(chat_id, "Iltimos, avval /start buyrug'ini bosing.")
         return
 
-    status_msg = bot.send_message(chat_id, "🤔 Ovozli xabaringiz eshitilmoqda va matnga o'girilmoqda...")
+    status_msg = bot.send_message(chat_id, "🤔 AI ovozingizni tinglamoqda va tahlil qilmoqda...")
 
     try:
-        # 1. Telegramdan ovozni yuklab olish
+        # Telegramdan ovoz faylini yuklab olish
         file_info = bot.get_file(message.voice.file_id)
         file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
-        
-        ogg_path = f"voice_{chat_id}.ogg"
-        wav_path = f"voice_{chat_id}.wav"
-        
-        with open(ogg_path, 'wb') as f:
-            f.write(requests.get(file_url).content)
-        
-        # 2. OGG formatini WAV formatiga o'tkazish (SpeechRecognition uchun)
-        audio = AudioSegment.from_file(ogg_path, format="ogg")
-        audio.export(wav_path, format="wav")
+        audio_data = requests.get(file_url).content
 
-        # 3. Koreyscha nutqni matnga o'girish
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(wav_path) as source:
-            audio_data = recognizer.record(source)
-            # Google nutqni aniqlash tizimi orqali koreyscha matnni olamiz
-            user_spoken_text = recognizer.recognize_google(audio_data, language="ko-KR")
-
-        # Vaqtinchalik fayllarni o'chiramiz
-        if os.path.exists(ogg_path): os.remove(ogg_path)
-        if os.path.exists(wav_path): os.remove(wav_path)
-
-        bot.edit_message_text("🧠 Sun'iy intellekt talaffuzingizni tahlil qilmoqda...", chat_id, status_msg.message_id)
-
-        # 4. Gemini orqali solishtirish va tahlil qilish
+        # Gemini 1.5 Flash modeli bilan bevosita bog'lanish
         model = genai.GenerativeModel("gemini-1.5-flash")
         original_text = user_sessions[chat_id]["text"]
         
         prompt = f"""
-        Foydalanuvchi quyidagi asl koreyscha gapni o'qishi kerak edi: "{original_text}".
-        Lekin u talaffuz qilganda quyidagicha gapirdi: "{user_spoken_text}".
+        Siz koreys tili bo'yicha professional Chatty botsiz.
+        Foydalanuvchi sizga yuborgan ushbu audio faylda mana bu gapni o'qigan: "{original_text}".
+        Audioni tinglang va uning talaffuzini asl gap bilan solishtiring.
         
-        Ushbu ikkala matnni solishtiring. Foydalanuvchi noto'g'ri aytgan yoki xato talaffuz qilgan so'zlarni aniqlang.
-        Javobni aniq 3 ta bo'limga ajratib, faqat O'zbek tilida yozing:
+        Javobni aniq mana shu formatda va faqat O'zbek tilida qaytaring:
         
-        1. MATNLITAHIL: Asl gapni qayta yozing, lekin foydalanuvchi xato aytgan yoki aytolmagan so'zlarni qalin (**bold**) qilib belgilang.
-        2. TUSHUNTIRISH: Qaysi qismlarda talaffuz yoki grammatik og'ish borligini qisqa tushuntiring.
-        3. BAHO: 100 ballik tizimda bitta baho bering (Masalan: 88/100).
+        1. MATNLITAHIL: Foydalanuvchi aytgan gapdagi xato yoki noto'g'ri talaffuz qilingan so'zlarni qalin (**bold**) qilib belgilang. Masalan: "안녕하세요. 저는 **바람개비**입니다..."
+        2. TUSHUNTIRISH: Qaysi harflarda xato qilinganini lo'nda tushuntiring.
+        3. BAHO: Talaffuzga 100 ballik tizimda bitta baho bering (Masalan: 85/100).
         """
 
-        response = model.generate_content(prompt)
+        # OGG audio formatini to'g'ridan-to'g'ri Gemini'ga uzatamiz
+        response = model.generate_content([
+            prompt,
+            {
+                "mime_type": "audio/ogg",
+                "data": audio_data
+            }
+        ])
+        
         res_text = response.text
         
-        analysis_part = user_spoken_text
-        explain_part = "Talaffuz tahlili yakunlandi."
-        score_part = "🎯 Baho: 85/100"
+        analysis_part = "Tahlil yakunlandi."
+        explain_part = "Talaffuz bo'yicha tavsiyalar."
+        score_part = "🎯 Baho: 80/100"
         
         if "MATNLITAHIL" in res_text:
             try:
@@ -167,12 +152,9 @@ def handle_voice(message):
         bot.delete_message(chat_id, status_msg.message_id)
         bot.send_message(chat_id, f"📝 **AI Matnli tahlili:**\n\n{analysis_part}", reply_markup=markup, parse_mode="Markdown")
 
-    except sr.UnknownValueError:
-        bot.delete_message(chat_id, status_msg.message_id)
-        bot.send_message(chat_id, "❌ Kechirasiz, ovozingizni aniqlab bo'lmadi. Iltimos, aniqroq va balandroq gapirib qaytadan yuboring.")
     except Exception as e:
         bot.delete_message(chat_id, status_msg.message_id)
-        bot.send_message(chat_id, "❌ Tizimda xatolik bo'ldi. Qaytadan urinib ko'ring yoki /start bosing.")
+        bot.send_message(chat_id, "❌ Audio tahlilida texnik muammo yuz berdi. Iltimos, qaytadan aniqroq gapirib ko'ring.")
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
