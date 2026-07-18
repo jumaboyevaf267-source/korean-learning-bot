@@ -11,6 +11,11 @@ class Config:
     DATABASE_PATH = os.getenv("DATABASE_PATH", "src/database/korean_bot.db")
     PORT = int(os.getenv("PORT", 10000))
     DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
+    
+    # ChatGPT tavsiya qilgan AI sozlamalari
+    MODEL_NAME = "gemini-2.5-flash"
+    AI_TEMPERATURE = 0.5
+    AI_MAX_TOKENS = 1024
 
     @classmethod
     def validate(cls):
