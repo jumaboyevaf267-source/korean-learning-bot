@@ -8,14 +8,20 @@ async def main():
         # Professional bot klassini obyekt sifatida yaratish
         bot = KoreanLearningBot()
         
-        # Botni ishga tushirish
-        bot.run()
+        # O'zgarish: bot.run() o'rniga application.initialize() ni kutamiz
+        # Agar KoreanLearningBot klassingiz ichida 'application' atributi bo'lsa:
+        await bot.application.initialize()
+        await bot.application.start()
+        await bot.application.updater.start_polling()
+        
+        # Botni ushlab turish
+        await asyncio.Event().wait()
+        
     except Exception as e:
         logger.critical(f"Botni ishga tushirishda kutilmagan og'ir xatolik: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
-    # Windows platformasidagi ba'zi asinxron xatoliklarning oldini olish uchun
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         
@@ -23,3 +29,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot tizimi foydalanuvchi tomonidan qo'lda to'xtatildi.")
+        
