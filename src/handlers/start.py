@@ -1,7 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from src.database import db_client
-from src.keyboards.main_menu.py import get_main_menu # Bu yerda import birozdan keyin aniqlashadi
 from src.keyboards.main_menu import get_main_menu
 from src.utils.logger import logger
 
@@ -24,3 +23,4 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"User {user.id} botni ishga tushirdi (/start).")
     except Exception as e:
         logger.error(f"/start buyrug'ini yuborishda xatolik (User: {user.id}): {e}")
+        
