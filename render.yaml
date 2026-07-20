@@ -1,13 +1,11 @@
 services:
   - type: web
     name: korean-learning-bot
-
     runtime: python
+    pythonVersion: "3.13.5"
 
     buildCommand: pip install -r requirements.txt
-
     startCommand: python main.py
 
     plan: free
-
     autoDeploy: true
