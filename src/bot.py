@@ -4,20 +4,23 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
-    ContextTypes,
     filters,
 )
 
 from src.config import Config
 from src.database import db_client
 from src.ai.gemini_client import GeminiClient
+
 from src.handlers.start import start_command
 from src.handlers.language import language_callback
+from src.handlers.topik import topik_callback
 from src.handlers.text_handler import handle_user_text
+
 from src.utils.logger import logger
 
 
 class KoreanLearningBot:
+
     def __init__(self):
         self.application = (
             Application.builder()
@@ -27,16 +30,21 @@ class KoreanLearningBot:
 
         self._register_handlers()
 
-        # Bot ishga tushganda avtomatik bajariladi
         self.application.post_init = self.on_startup
+        self.application.post_shutdown = self.on_shutdown
 
     def _register_handlers(self):
         """Barcha handlerlarni ulash"""
 
+        # /start
         self.application.add_handler(
-            CommandHandler("start", start_command)
+            CommandHandler(
+                "start",
+                start_command
+            )
         )
 
+        # Til tanlash
         self.application.add_handler(
             CallbackQueryHandler(
                 language_callback,
@@ -44,6 +52,15 @@ class KoreanLearningBot:
             )
         )
 
+        # TOPIK tanlash
+        self.application.add_handler(
+            CallbackQueryHandler(
+                topik_callback,
+                pattern=r"^topik_"
+            )
+        )
+
+        # AI bilan suhbat
         self.application.add_handler(
             MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
@@ -54,9 +71,9 @@ class KoreanLearningBot:
         logger.info("Barcha handlerlar muvaffaqiyatli ulandi.")
 
     async def on_startup(self, app: Application):
-        """Bot ishga tushganda bajariladi"""
+        """Bot ishga tushganda"""
 
-        logger.info("Ma'lumotlar bazasi tekshirilmoqda...")
+        logger.info("Database ishga tushirilmoqda...")
 
         await db_client.init_db()
 
@@ -67,7 +84,7 @@ class KoreanLearningBot:
         logger.info(f"{Config.BOT_NAME} muvaffaqiyatli ishga tushdi.")
 
     async def on_shutdown(self, app: Application):
-        """Bot to'xtayotganda"""
+        """Bot yopilganda"""
 
         logger.info("Bot xavfsiz yopildi.")
 
@@ -75,8 +92,6 @@ class KoreanLearningBot:
         """Botni Polling rejimida ishga tushirish"""
 
         logger.info("Bot polling rejimida ishga tushmoqda...")
-
-        self.application.post_shutdown = self.on_shutdown
 
         self.application.run_polling(
             allowed_updates=Update.ALL_TYPES,
