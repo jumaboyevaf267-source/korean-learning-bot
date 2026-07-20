@@ -1,5 +1,4 @@
 from telegram import Update
-
 from telegram.ext import ContextTypes
 
 from src.keyboards.language import get_language_keyboard
@@ -8,6 +7,7 @@ from src.utils.logger import logger
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     user = update.effective_user
 
     await db_client.add_user(
@@ -27,4 +27,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_language_keyboard()
     )
 
-    logger.info(f"User {user.id} started the bot.")
+    logger.info(
+        f"User {user.id} started the bot."
+    )
