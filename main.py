@@ -5,18 +5,18 @@ from src.utils.logger import logger
 
 
 def main():
-    """Botni ishga tushirish."""
-
     try:
-        logger.info("======================================")
-        logger.info("Learning Korean AI Bot ishga tushmoqda...")
-        logger.info("======================================")
+        logger.info("=" * 50)
+        logger.info("Learning Korean AI Bot")
+        logger.info("Bot ishga tushmoqda...")
+        logger.info("=" * 50)
 
         bot = KoreanLearningBot()
+
         bot.run()
 
     except KeyboardInterrupt:
-        logger.info("Bot foydalanuvchi tomonidan to'xtatildi.")
+        logger.info("Bot to'xtatildi.")
 
     except Exception as e:
         logger.critical(f"Kutilmagan xatolik: {e}")
