@@ -1,4 +1,4 @@
-from telegram import Update
+  from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -14,6 +14,7 @@ from src.ai.gemini_client import GeminiClient
 from src.handlers.start import start_command
 from src.handlers.language import language_callback
 from src.handlers.topik import topik_callback
+from src.handlers.goal import goal_callback
 from src.handlers.text_handler import handle_user_text
 
 from src.utils.logger import logger
@@ -60,6 +61,14 @@ class KoreanLearningBot:
             )
         )
 
+        # Goal tanlash
+        self.application.add_handler(
+            CallbackQueryHandler(
+                goal_callback,
+                pattern=r"^goal_"
+            )
+        )
+
         # AI bilan suhbat
         self.application.add_handler(
             MessageHandler(
@@ -96,5 +105,4 @@ class KoreanLearningBot:
         self.application.run_polling(
             allowed_updates=Update.ALL_TYPES,
             drop_pending_updates=True,
-            close_loop=True,
-        )
+        )          
