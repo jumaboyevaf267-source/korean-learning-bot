@@ -1,8 +1,10 @@
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
+    ContextTypes,
     filters,
 )
 
@@ -16,7 +18,6 @@ from src.utils.logger import logger
 
 
 class KoreanLearningBot:
-
     def __init__(self):
         self.application = (
             Application.builder()
@@ -24,11 +25,13 @@ class KoreanLearningBot:
             .build()
         )
 
-        self.setup_handlers()
+        self._register_handlers()
 
+        # Bot ishga tushganda avtomatik bajariladi
         self.application.post_init = self.on_startup
 
-    def setup_handlers(self):
+    def _register_handlers(self):
+        """Barcha handlerlarni ulash"""
 
         self.application.add_handler(
             CommandHandler("start", start_command)
@@ -37,7 +40,7 @@ class KoreanLearningBot:
         self.application.add_handler(
             CallbackQueryHandler(
                 language_callback,
-                pattern="^lang_"
+                pattern=r"^lang_"
             )
         )
 
@@ -51,17 +54,32 @@ class KoreanLearningBot:
         logger.info("Barcha handlerlar muvaffaqiyatli ulandi.")
 
     async def on_startup(self, app: Application):
+        """Bot ishga tushganda bajariladi"""
+
+        logger.info("Ma'lumotlar bazasi tekshirilmoqda...")
 
         await db_client.init_db()
 
+        logger.info("Gemini AI yuklanmoqda...")
+
         app.bot_data["gemini_ai"] = GeminiClient()
 
-        logger.info(f"{Config.BOT_NAME} ishga tushdi.")
+        logger.info(f"{Config.BOT_NAME} muvaffaqiyatli ishga tushdi.")
+
+    async def on_shutdown(self, app: Application):
+        """Bot to'xtayotganda"""
+
+        logger.info("Bot xavfsiz yopildi.")
 
     def run(self):
+        """Botni Polling rejimida ishga tushirish"""
 
         logger.info("Bot polling rejimida ishga tushmoqda...")
 
+        self.application.post_shutdown = self.on_shutdown
+
         self.application.run_polling(
-            drop_pending_updates=True
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True,
+            close_loop=True,
         )
