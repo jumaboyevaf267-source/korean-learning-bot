@@ -1,10 +1,14 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from src.keyboards.topik import get_topik_keyboard
 from src.utils.logger import logger
 
 
-async def language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def language_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     query = update.callback_query
 
@@ -14,24 +18,35 @@ async def language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["language"] = language
 
+
     if language == "uz":
+
         text = (
             "🇺🇿 Til o'rnatildi.\n\n"
-            "Endi menga istalgan xabar yuboring."
+            "📚 TOPIK darajangizni tanlang."
         )
 
     elif language == "ru":
+
         text = (
             "🇷🇺 Язык установлен.\n\n"
-            "Теперь отправьте мне любое сообщение."
+            "📚 Выберите ваш уровень TOPIK."
         )
 
     else:
+
         text = (
             "🇬🇧 Language selected.\n\n"
-            "Now send me any message."
+            "📚 Choose your TOPIK level."
         )
 
-    await query.edit_message_text(text)
 
-    logger.info(f"Language selected: {language}")
+    await query.edit_message_text(
+        text=text,
+        reply_markup=get_topik_keyboard()
+    )
+
+
+    logger.info(
+        f"Language selected: {language}"
+    )
