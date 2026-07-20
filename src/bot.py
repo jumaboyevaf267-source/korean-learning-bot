@@ -4,6 +4,7 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
+    ContextTypes,
     filters,
 )
 
@@ -69,7 +70,7 @@ class KoreanLearningBot:
             )
         )
 
-        # AI bilan suhbat
+        # Oddiy xabarlar
         self.application.add_handler(
             MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
@@ -90,7 +91,9 @@ class KoreanLearningBot:
 
         app.bot_data["gemini_ai"] = GeminiClient()
 
-        logger.info(f"{Config.BOT_NAME} muvaffaqiyatli ishga tushdi.")
+        logger.info(
+            f"{Config.BOT_NAME} muvaffaqiyatli ishga tushdi."
+        )
 
     async def on_shutdown(self, app: Application):
         """Bot yopilganda"""
@@ -98,11 +101,11 @@ class KoreanLearningBot:
         logger.info("Bot xavfsiz yopildi.")
 
     def run(self):
-        """Botni Polling rejimida ishga tushirish"""
+        """Botni ishga tushirish"""
 
         logger.info("Bot polling rejimida ishga tushmoqda...")
 
         self.application.run_polling(
             allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True,
-        )          
+            drop_pending_updates=True
+        )
