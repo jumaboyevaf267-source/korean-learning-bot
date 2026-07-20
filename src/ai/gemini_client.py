@@ -1,5 +1,4 @@
 import asyncio
-
 from google import genai
 from google.genai import types
 
@@ -9,91 +8,53 @@ from src.utils.logger import logger
 
 
 class GeminiClient:
-
     def __init__(self):
-
-        self.client = genai.Client(
-            api_key=Config.GEMINI_API_KEY
-        )
-
-        logger.info("Gemini AI muvaffaqiyatli yuklandi.")
+        self.client = genai.Client(api_key=Config.GEMINI_API_KEY)
+        logger.info("Gemini AI Client ishga tushdi.")
 
     async def generate_response(
         self,
         user_id: int,
         user_message: str,
-        chat_history: list = None
-    ):
+        chat_history: list | None = None,
+    ) -> str:
 
         try:
-
             contents = []
 
             if chat_history:
+                for message in chat_history:
+                    contents.append({
+                        "role": message["role"],
+                        "parts": [{"text": message["text"]}]
+                    })
 
-                for item in chat_history:
-
-                    contents.append(
-                        types.Content(
-                            role=item["role"],
-                            parts=[
-                                types.Part.from_text(
-                                    text=item["text"]
-                                )
-                            ]
-                        )
-                    )
-
-            contents.append(
-
-                types.Content(
-
-                    role="user",
-
-                    parts=[
-                        types.Part.from_text(
-                            text=user_message
-                        )
-                    ]
-                )
-
-            )
+            contents.append({
+                "role": "user",
+                "parts": [{"text": user_message}]
+            })
 
             config = types.GenerateContentConfig(
-
                 system_instruction=SYSTEM_PROMPT,
-
                 temperature=Config.AI_TEMPERATURE,
-
-                max_output_tokens=Config.AI_MAX_TOKENS
-
+                max_output_tokens=Config.AI_MAX_TOKENS,
             )
 
             response = await asyncio.to_thread(
-
                 self.client.models.generate_content,
-
                 model=Config.MODEL_NAME,
-
                 contents=contents,
-
-                config=config
-
+                config=config,
             )
 
             if response.text:
-
                 return response.text.strip()
 
             return "죄송합니다. 다시 시도해주세요."
 
         except Exception as e:
-
-            logger.exception(
-                f"Gemini Error ({user_id}): {e}"
-            )
-
+            logger.exception(f"Gemini Error (User {user_id}): {e}")
             return (
-                "⚠️ Server bilan bog'lanishda "
-                "muammo yuz berdi."
-          )
+                "⚠️ Hozircha javob bera olmayapman. "
+                "Iltimos, birozdan keyin yana urinib ko'ring."
+            )
