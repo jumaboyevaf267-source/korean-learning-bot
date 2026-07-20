@@ -8,7 +8,7 @@ logging.basicConfig(
     format=LOG_FORMAT,
     handlers=[
         logging.StreamHandler(sys.stdout)
-    ]
+    ],
 )
 
 logger = logging.getLogger("LearningKoreanBot")
