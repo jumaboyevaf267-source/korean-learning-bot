@@ -12,11 +12,12 @@ async def handle_user_text(
 ):
 
     user = update.effective_user
-    message = update.message.text
+
+    message = update.message.text.strip()
 
     await db_client.add_user(
         user.id,
-        user.username if user.username else ""
+        user.username or ""
     )
 
     await db_client.save_message(
@@ -30,19 +31,25 @@ async def handle_user_text(
         action=ChatAction.TYPING
     )
 
-    gemini_ai = context.bot_data.get("gemini_ai")
+    gemini_ai = context.bot_data.get(
+        "gemini_ai"
+    )
 
     if gemini_ai is None:
 
-        logger.error("GeminiClient topilmadi.")
-
         await update.message.reply_text(
-            "⚠️ Server ishga tushmagan."
+            "⚠️ AI server ishlamayapti."
+        )
+
+        logger.error(
+            "GeminiClient topilmadi."
         )
 
         return
 
-    history = await db_client.get_history(user.id)
+    history = await db_client.get_history(
+        user.id
+    )
 
     answer = await gemini_ai.generate_response(
         user.id,
@@ -56,8 +63,10 @@ async def handle_user_text(
         answer
     )
 
-    await update.message.reply_text(answer)
+    await update.message.reply_text(
+        answer
+    )
 
     logger.info(
-        f"User {user.id} ga javob yuborildi."
-  )
+        f"Answer sent to {user.id}"
+    )
