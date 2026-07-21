@@ -1,10 +1,11 @@
+import asyncio
+
 from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
-    ContextTypes,
     filters,
 )
 
@@ -38,7 +39,6 @@ class KoreanLearningBot:
     def _register_handlers(self):
         """Barcha handlerlarni ulash"""
 
-        # /start
         self.application.add_handler(
             CommandHandler(
                 "start",
@@ -46,7 +46,6 @@ class KoreanLearningBot:
             )
         )
 
-        # Til tanlash
         self.application.add_handler(
             CallbackQueryHandler(
                 language_callback,
@@ -54,7 +53,6 @@ class KoreanLearningBot:
             )
         )
 
-        # TOPIK tanlash
         self.application.add_handler(
             CallbackQueryHandler(
                 topik_callback,
@@ -62,7 +60,6 @@ class KoreanLearningBot:
             )
         )
 
-        # Goal tanlash
         self.application.add_handler(
             CallbackQueryHandler(
                 goal_callback,
@@ -70,7 +67,6 @@ class KoreanLearningBot:
             )
         )
 
-        # Oddiy xabarlar
         self.application.add_handler(
             MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
@@ -105,7 +101,31 @@ class KoreanLearningBot:
 
         logger.info("Bot polling rejimida ishga tushmoqda...")
 
-        self.application.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True
-        )
+        async def main_runner():
+            await self.application.initialize()
+
+            if self.application.post_init:
+                await self.application.post_init(self.application)
+
+            await self.application.start()
+
+            await self.application.updater.start_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True,
+            )
+
+            try:
+                await asyncio.Event().wait()
+            finally:
+                await self.application.updater.stop()
+                await self.application.stop()
+
+                if self.application.post_shutdown:
+                    await self.application.post_shutdown(self.application)
+
+                await self.application.shutdown()
+
+        try:
+            asyncio.run(main_runner())
+        except (KeyboardInterrupt, SystemExit):
+            logger.info("Bot to'xtatildi.")
