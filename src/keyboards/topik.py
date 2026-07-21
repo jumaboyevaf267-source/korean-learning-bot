@@ -2,9 +2,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def get_topik_keyboard():
-    """
-    Foydalanuvchining TOPIK darajasini tanlash.
-    """
 
     keyboard = [
 
@@ -47,6 +44,13 @@ def get_topik_keyboard():
             InlineKeyboardButton(
                 "🏆 TOPIK 5+",
                 callback_data="topik_5"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "⬅️ Orqaga",
+                callback_data="back_language"
             )
         ]
 
