@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from src.utils.logger import logger
+from src.keyboards.vocabulary import get_vocabulary_keyboard
 
 
 async def menu_callback(
@@ -13,49 +13,62 @@ async def menu_callback(
 
     await query.answer()
 
-    data = query.data.replace("menu_", "")
+    data = query.data
 
     language = context.user_data.get(
         "language",
         "uz"
     )
 
-    texts = {
+    if data == "menu_vocab":
 
-        "uz": {
-            "vocab": "📚 Lug'at bo'limi tez orada qo'shiladi.",
-            "chat": "💬 AI Chat tayyor. Menga oddiy xabar yozishingiz mumkin.",
-            "topik": "📝 TOPIK bo'limi tez orada qo'shiladi.",
-            "daily": "🔥 Daily Mission tez orada qo'shiladi.",
-            "progress": "📊 Progress tizimi tez orada qo'shiladi.",
-            "settings": "⚙️ Sozlamalar tez orada qo'shiladi."
-        },
+        if language == "uz":
 
-        "ru": {
-            "vocab": "📚 Раздел слов скоро появится.",
-            "chat": "💬 AI Chat готов. Просто отправьте сообщение.",
-            "topik": "📝 Раздел TOPIK скоро появится.",
-            "daily": "🔥 Ежедневные задания скоро появятся.",
-            "progress": "📊 Статистика скоро появится.",
-            "settings": "⚙️ Настройки скоро появятся."
-        },
+            text = (
+                "📚 Lug'at\n\n"
+                "Quyidagi bo'limlardan birini tanlang."
+            )
 
-        "en": {
-            "vocab": "📚 Vocabulary section coming soon.",
-            "chat": "💬 AI Chat is ready. Just send me a message.",
-            "topik": "📝 TOPIK section coming soon.",
-            "daily": "🔥 Daily Mission coming soon.",
-            "progress": "📊 Progress section coming soon.",
-            "settings": "⚙️ Settings coming soon."
-        }
+        elif language == "ru":
 
-    }
+            text = (
+                "📚 Словарь\n\n"
+                "Выберите один из разделов."
+            )
+
+        else:
+
+            text = (
+                "📚 Vocabulary\n\n"
+                "Choose one of the sections below."
+            )
+
+        await query.edit_message_text(
+            text=text,
+            reply_markup=get_vocabulary_keyboard()
+        )
+
+        return
+
+    if language == "uz":
+
+        text = (
+            "🚧 Ushbu bo'lim hali ishlab chiqilmoqda."
+        )
+
+    elif language == "ru":
+
+        text = (
+            "🚧 Этот раздел пока находится в разработке."
+        )
+
+    else:
+
+        text = (
+            "🚧 This section is under development."
+        )
 
     await query.answer(
-        texts[language][data],
+        text=text,
         show_alert=True
-    )
-
-    logger.info(
-        f"User {query.from_user.id} opened {data}"
     )
