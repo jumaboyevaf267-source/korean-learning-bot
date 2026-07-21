@@ -59,6 +59,13 @@ def get_goal_keyboard():
                 "✈️ Travel",
                 callback_data="goal_travel"
             )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "⬅️ Orqaga",
+                callback_data="back_topik"
+            )
         ]
 
     ]
