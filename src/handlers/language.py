@@ -18,35 +18,36 @@ async def language_callback(
 
     context.user_data["language"] = language
 
+    context.user_data["page"] = "topik"
+
+    context.user_data["back"] = "language"
 
     if language == "uz":
 
         text = (
-            "🇺🇿 Til o'rnatildi.\n\n"
-            "📚 TOPIK darajangizni tanlang."
+            "🇺🇿 Til muvaffaqiyatli tanlandi.\n\n"
+            "📚 Endi TOPIK darajangizni tanlang."
         )
 
     elif language == "ru":
 
         text = (
-            "🇷🇺 Язык установлен.\n\n"
-            "📚 Выберите ваш уровень TOPIK."
+            "🇷🇺 Язык успешно выбран.\n\n"
+            "📚 Теперь выберите ваш уровень TOPIK."
         )
 
     else:
 
         text = (
-            "🇬🇧 Language selected.\n\n"
-            "📚 Choose your TOPIK level."
+            "🇬🇧 Language selected successfully.\n\n"
+            "📚 Now choose your TOPIK level."
         )
-
 
     await query.edit_message_text(
         text=text,
         reply_markup=get_topik_keyboard()
     )
 
-
     logger.info(
-        f"Language selected: {language}"
+        f"User {query.from_user.id} selected language: {language}"
     )
