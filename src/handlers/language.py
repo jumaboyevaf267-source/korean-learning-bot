@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from src.keyboards.topik import get_topik_keyboard
+from src.keyboards.back import get_back_keyboard
 from src.utils.logger import logger
 
 
@@ -14,40 +15,45 @@ async def language_callback(
 
     await query.answer()
 
-    language = query.data.replace("lang_", "")
+    language = query.data.replace(
+        "lang_",
+        ""
+    )
 
     context.user_data["language"] = language
-
-    context.user_data["page"] = "topik"
-
-    context.user_data["back"] = "language"
 
     if language == "uz":
 
         text = (
-            "🇺🇿 Til muvaffaqiyatli tanlandi.\n\n"
-            "📚 Endi TOPIK darajangizni tanlang."
+            "🇺🇿 Til o'rnatildi.\n\n"
+            "📚 TOPIK darajangizni tanlang."
         )
 
     elif language == "ru":
 
         text = (
-            "🇷🇺 Язык успешно выбран.\n\n"
-            "📚 Теперь выберите ваш уровень TOPIK."
+            "🇷🇺 Язык установлен.\n\n"
+            "📚 Выберите ваш уровень TOPIK."
         )
 
     else:
 
         text = (
-            "🇬🇧 Language selected successfully.\n\n"
-            "📚 Now choose your TOPIK level."
+            "🇬🇧 Language selected.\n\n"
+            "📚 Choose your TOPIK level."
         )
+
+    keyboard = get_topik_keyboard()
+
+    keyboard.inline_keyboard.append(
+        get_back_keyboard("language").inline_keyboard[0]
+    )
 
     await query.edit_message_text(
         text=text,
-        reply_markup=get_topik_keyboard()
+        reply_markup=keyboard
     )
 
     logger.info(
-        f"User {query.from_user.id} selected language: {language}"
+        f"Language selected: {language}"
     )
