@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from src.keyboards.goal import get_goal_keyboard
+from src.keyboards.back import get_back_keyboard
 from src.utils.logger import logger
 
 
@@ -14,18 +15,20 @@ async def topik_callback(
 
     await query.answer()
 
-    level = query.data.replace("topik_", "")
+    level = query.data.replace(
+        "topik_",
+        ""
+    )
 
     context.user_data["topik"] = level
 
-    context.user_data["page"] = "goal"
-
-    context.user_data["back"] = "topik"
-
-    language = context.user_data.get("language", "uz")
-
     logger.info(
-        f"User {query.from_user.id} selected TOPIK {level}"
+        f"User {query.from_user.id} TOPIK level: {level}"
+    )
+
+    language = context.user_data.get(
+        "language",
+        "uz"
     )
 
     if language == "uz":
@@ -46,10 +49,16 @@ async def topik_callback(
 
         text = (
             f"📚 TOPIK {level} selected.\n\n"
-            "🎯 Choose your learning goal."
+            "🎯 Now choose your learning goal."
         )
+
+    keyboard = get_goal_keyboard()
+
+    keyboard.inline_keyboard.append(
+        get_back_keyboard("topik").inline_keyboard[0]
+    )
 
     await query.edit_message_text(
         text=text,
-        reply_markup=get_goal_keyboard()
-    )
+        reply_markup=keyboard
+        )
