@@ -14,24 +14,19 @@ async def topik_callback(
 
     await query.answer()
 
-    level = query.data.replace(
-        "topik_",
-        ""
-    )
+    level = query.data.replace("topik_", "")
 
     context.user_data["topik"] = level
 
+    context.user_data["page"] = "goal"
+
+    context.user_data["back"] = "topik"
+
+    language = context.user_data.get("language", "uz")
 
     logger.info(
-        f"User {query.from_user.id} TOPIK level: {level}"
+        f"User {query.from_user.id} selected TOPIK {level}"
     )
-
-
-    language = context.user_data.get(
-        "language",
-        "uz"
-    )
-
 
     if language == "uz":
 
@@ -51,9 +46,8 @@ async def topik_callback(
 
         text = (
             f"📚 TOPIK {level} selected.\n\n"
-            "🎯 Now choose your learning goal."
+            "🎯 Choose your learning goal."
         )
-
 
     await query.edit_message_text(
         text=text,
