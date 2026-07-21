@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from src.keyboards.menu import get_main_menu
+from src.keyboards.back import get_back_keyboard
 from src.utils.logger import logger
 
 
@@ -81,7 +82,13 @@ async def goal_callback(
             "Use the menu below."
         )
 
+    keyboard = get_main_menu(language)
+
+    keyboard.inline_keyboard.append(
+        get_back_keyboard("goal").inline_keyboard[0]
+    )
+
     await query.edit_message_text(
         text=text,
-        reply_markup=get_main_menu(language)
+        reply_markup=keyboard
     )
