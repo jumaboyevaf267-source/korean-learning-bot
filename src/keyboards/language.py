@@ -2,10 +2,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def get_language_keyboard():
-    """
-    Foydalanuvchi birinchi marta kirganda
-    til tanlash tugmalari.
-    """
 
     keyboard = [
 
