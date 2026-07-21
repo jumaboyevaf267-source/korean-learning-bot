@@ -1,4 +1,4 @@
-import asyncio
+    import asyncio
 
 from telegram import Update
 from telegram.ext import (
@@ -18,6 +18,7 @@ from src.handlers.language import language_callback
 from src.handlers.topik import topik_callback
 from src.handlers.goal import goal_callback
 from src.handlers.menu import menu_callback
+from src.handlers.back import back_callback
 from src.handlers.text_handler import handle_user_text
 
 from src.utils.logger import logger
@@ -39,7 +40,6 @@ class KoreanLearningBot:
         self.application.post_shutdown = self.on_shutdown
 
     def _register_handlers(self):
-        """Barcha handlerlarni ulash"""
 
         self.application.add_handler(
             CommandHandler(
@@ -77,6 +77,13 @@ class KoreanLearningBot:
         )
 
         self.application.add_handler(
+            CallbackQueryHandler(
+                back_callback,
+                pattern=r"^back_"
+            )
+        )
+
+        self.application.add_handler(
             MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
                 handle_user_text
@@ -88,7 +95,6 @@ class KoreanLearningBot:
         )
 
     async def on_startup(self, app: Application):
-        """Bot ishga tushganda"""
 
         logger.info(
             "Database ishga tushirilmoqda..."
@@ -107,12 +113,10 @@ class KoreanLearningBot:
         )
 
     async def on_shutdown(self, app: Application):
-        """Bot yopilganda"""
 
         logger.info("Bot xavfsiz yopildi.")
 
     def run(self):
-        """Botni ishga tushirish"""
 
         logger.info(
             "Bot polling rejimida ishga tushmoqda..."
@@ -151,9 +155,8 @@ class KoreanLearningBot:
                 await self.application.shutdown()
 
         try:
-
             asyncio.run(main_runner())
 
         except (KeyboardInterrupt, SystemExit):
 
-            logger.info("Bot to'xtatildi.")
+            logger.info("Bot to'xtatildi.")  
