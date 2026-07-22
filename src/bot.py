@@ -136,48 +136,22 @@ class KoreanLearningBot:
         )
 
     def run(self):
-        """Botni ishga tushirish"""
+    """Botni ishga tushirish"""
 
-        logger.info(
-            "Bot polling rejimida ishga tushmoqda..."
+    logger.info(
+        "Bot polling rejimida ishga tushmoqda..."
+    )
+
+    try:
+
+        self.application.run_polling(
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True,
+            close_loop=False,
         )
 
-        async def main_runner():
+    except (KeyboardInterrupt, SystemExit):
 
-            await self.application.initialize()
-
-            if self.application.post_init:
-                await self.application.post_init(
-                    self.application
-                )
-
-            await self.application.start()
-
-            await self.application.updater.start_polling(
-                drop_pending_updates=True,
-            )
-
-            try:
-                await asyncio.Event().wait()
-
-            finally:
-
-                await self.application.updater.stop()
-
-                await self.application.stop()
-
-                if self.application.post_shutdown:
-                    await self.application.post_shutdown(
-                        self.application
-                    )
-
-                await self.application.shutdown()
-
-        try:
-            asyncio.run(main_runner())
-
-        except (KeyboardInterrupt, SystemExit):
-
-            logger.info(
-                "Bot to'xtatildi."
+        logger.info(
+            "Bot to'xtatildi."
         )
