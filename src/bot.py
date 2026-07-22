@@ -154,7 +154,6 @@ class KoreanLearningBot:
             await self.application.start()
 
             await self.application.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES,
                 drop_pending_updates=True,
             )
 
